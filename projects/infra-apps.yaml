@@ -59,6 +59,8 @@ spec:
     helm:
       values: |
         installCRDs: true
+        prometheus:
+          enabled: false
         replicaCount: 1
         resources:
           requests:
@@ -95,6 +97,8 @@ spec:
     helm:
       values: |
         installCRDs: true
+        prometheus:
+          enabled: false
         replicaCount: 1
         resources:
           requests:
