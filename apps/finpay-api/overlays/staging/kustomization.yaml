@@ -1,0 +1,86 @@
+################################################################################
+# apps/finpay-api/overlays/staging/kustomization.yaml
+################################################################################
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: finpay-staging
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+images:
+  - name: REGISTRY/finpay-api
+    newName: 623155450332.dkr.ecr.eu-north-1.amazonaws.com/finpay-api
+    newTag: latest
+
+patches:
+  - target:
+      kind: Namespace
+      name: finpay-base
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: finpay-staging
+
+  - target:
+      kind: Deployment
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+  - target:
+      kind: Deployment
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 6
+
+  - target:
+      kind: ExternalSecret
+      name: finpay-api-secret
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: finpay/staging/api
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: finpay/staging/api
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: finpay/staging/api
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: finpay/staging/api
+
+  - target:
+      kind: ServiceAccount
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/eks.amazonaws.com~1role-arn
+        value: arn:aws:iam::623155450332:role/finpay-staging-eks-external-secrets
+
+commonLabels:
+  environment: staging

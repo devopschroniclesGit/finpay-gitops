@@ -1,0 +1,12 @@
+################################################################################
+# apps/finpay-api/base/pdb.yaml
+################################################################################
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: finpay-api
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finpay-api
+  minAvailable: 1   # At least 1 pod during node drains / cluster upgrades

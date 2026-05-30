@@ -1,0 +1,29 @@
+################################################################################
+# apps/finpay-api/overlays/staging/ingress.yaml
+################################################################################
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finpay-api
+  namespace: finpay-staging
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  tls:
+    - hosts:
+        - api.staging.finpay.io
+      secretName: finpay-api-staging-tls
+  rules:
+    - host: api.staging.finpay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: finpay-api
+                port:
+                  name: http

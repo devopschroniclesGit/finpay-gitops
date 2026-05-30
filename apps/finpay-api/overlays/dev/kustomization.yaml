@@ -1,0 +1,95 @@
+################################################################################
+# apps/finpay-api/overlays/dev/kustomization.yaml
+################################################################################
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: finpay-dev
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+# CI patches this image tag on every push
+images:
+  - name: REGISTRY/finpay-api
+    newName: 123456789012.dkr.ecr.eu-west-1.amazonaws.com/finpay-api
+    newTag: latest   # Replaced by CI: kustomize edit set image ...
+
+patches:
+  # Namespace name
+  - target:
+      kind: Namespace
+      name: finpay-base
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: finpay-dev
+
+  # Fewer replicas, smaller resources for dev
+  - target:
+      kind: Deployment
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  - target:
+      kind: Deployment
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+
+  # HPA — smaller scale range for dev
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 3
+
+  # ExternalSecret — point to dev secrets path
+  - target:
+      kind: ExternalSecret
+      name: finpay-api-secret
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: finpay/dev/api
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: finpay/dev/api
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: finpay/dev/api
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: finpay/dev/api
+
+  # ServiceAccount IRSA role
+  - target:
+      kind: ServiceAccount
+      name: finpay-api
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/eks.amazonaws.com~1role-arn
+        value: arn:aws:iam::123456789012:role/finpay-dev-eks-external-secrets
+
+commonLabels:
+  environment: dev
+
+commonAnnotations:
+  deployment.kubernetes.io/environment: dev

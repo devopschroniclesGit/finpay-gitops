@@ -1,0 +1,181 @@
+################################################################################
+# apps/finpay-api/base/deployment.yaml
+# Base Deployment — overlays patch replicas, image tag, resource limits
+################################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finpay-api
+  labels:
+    app.kubernetes.io/name: finpay-api
+    app.kubernetes.io/version: latest
+  annotations:
+    # Trigger rolling restart when secret changes
+    secret.reloader.stakater.com/reload: "finpay-api-secret"
+spec:
+  # replicas is overridden per overlay
+  replicas: 2
+  revisionHistoryLimit: 5
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finpay-api
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge:       1
+      maxUnavailable: 0   # Zero-downtime deploys
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: finpay-api
+        app.kubernetes.io/version: latest
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "3000"
+        prometheus.io/path:   "/metrics"
+    spec:
+      serviceAccountName: finpay-api
+
+      # Spread pods across AZs and nodes
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: finpay-api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: finpay-api
+
+      # Don't schedule on spot nodes by default (override in overlay if needed)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: role
+                    operator: In
+                    values: ["app", "default"]
+
+      # Prevent co-location of two API pods on same node
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: finpay-api
+              topologyKey: kubernetes.io/hostname
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser:    1001
+        runAsGroup:   1001
+        fsGroup:      1001
+        seccompProfile:
+          type: RuntimeDefault
+
+      terminationGracePeriodSeconds: 30
+
+      initContainers:
+        # Run Prisma migrations before new pods become ready
+        - name: migrate
+          # Image is patched per overlay
+          image: REGISTRY/finpay-api:latest
+          command: ["npx", "prisma", "migrate", "deploy"]
+          envFrom:
+            - secretRef:
+                name: finpay-api-secret
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            capabilities:
+              drop: ["ALL"]
+
+      containers:
+        - name: finpay-api
+          # Image tag is patched by CI via kustomize set image
+          image: REGISTRY/finpay-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          # All env vars come from the secret (managed by External Secrets Operator)
+          envFrom:
+            - secretRef:
+                name: finpay-api-secret
+
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+            # Downward API — useful for structured logs
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          # Resources are patched per overlay
+          resources:
+            requests:
+              cpu:    100m
+              memory: 256Mi
+            limits:
+              cpu:    500m
+              memory: 512Mi
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds:       20
+            failureThreshold:    3
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds:       10
+            failureThreshold:    3
+
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds:       5
+            failureThreshold:    12   # 60 seconds total startup budget
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem:   true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /app/logs
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}

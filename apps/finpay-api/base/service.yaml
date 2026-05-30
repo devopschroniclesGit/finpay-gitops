@@ -1,0 +1,18 @@
+################################################################################
+# apps/finpay-api/base/service.yaml
+################################################################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: finpay-api
+  labels:
+    app.kubernetes.io/name: finpay-api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: finpay-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

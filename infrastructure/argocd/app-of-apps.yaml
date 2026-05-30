@@ -1,0 +1,36 @@
+################################################################################
+# infrastructure/argocd/app-of-apps.yaml
+#
+# THE ROOT APPLICATION — apply this once to bootstrap everything else.
+# Argo CD will discover all other Applications in the projects/ and apps/ dirs.
+#
+# kubectl apply -n argocd -f infrastructure/argocd/app-of-apps.yaml
+################################################################################
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finpay-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/devopschroniclesGit/finpay-gitops
+    targetRevision: HEAD
+    path: projects   # Argo CD scans this folder for Application manifests
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+
+  syncPolicy:
+    automated:
+      prune:    true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

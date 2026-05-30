@@ -1,0 +1,117 @@
+################################################################################
+# projects/finpay-apps.yaml
+# Three Application resources — dev, staging, prod — each pointing at a
+# different Kustomize overlay in the apps/finpay-api/overlays directory.
+################################################################################
+
+# ── Dev ────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finpay-api-dev
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: finpay-api
+    environment: dev
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: finpay
+
+  source:
+    repoURL: https://github.com/devopschroniclesGit/finpay-gitops
+    targetRevision: HEAD
+    path: apps/finpay-api/overlays/dev
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finpay-dev
+
+  syncPolicy:
+    automated:
+      prune:    true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration:    5s
+        maxDuration: 3m
+        factor:      2
+
+  revisionHistoryLimit: 5
+
+---
+# ── Staging ────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finpay-api-staging
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: finpay-api
+    environment: staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: finpay
+
+  source:
+    repoURL: https://github.com/devopschroniclesGit/finpay-gitops
+    targetRevision: HEAD
+    path: apps/finpay-api/overlays/staging
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finpay-staging
+
+  syncPolicy:
+    automated:
+      prune:    true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+
+---
+# ── Production ─────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finpay-api-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: finpay-api
+    environment: prod
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: finpay
+
+  source:
+    repoURL: https://github.com/devopschroniclesGit/finpay-gitops
+    targetRevision: HEAD
+    path: apps/finpay-api/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finpay-prod
+
+  syncPolicy:
+    # Production: automated self-heal but MANUAL sync trigger for new versions
+    automated:
+      prune:    false  # Never auto-prune prod
+      selfHeal: true   # Drift correction is automatic
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PrunePropagationPolicy=foreground
