@@ -1,7 +1,3 @@
-################################################################################
-# projects/finpay-project.yaml
-# AppProject — restricts what the finpay apps can deploy and where
-################################################################################
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -11,61 +7,14 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   description: "FinPay API — all environments"
-
-  # Only allow sourcing from our GitOps repo
   sourceRepos:
-    - https://github.com/devopschroniclesGit/finpay-gitops
-    - https://charts.helm.sh/stable
-    - https://kubernetes.github.io/ingress-nginx
-    - https://charts.bitnami.com/bitnami
-
-  # Allowed destination clusters and namespaces
+    - "*"
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: finpay-dev
-    - server: https://kubernetes.default.svc
-      namespace: finpay-staging
-    - server: https://kubernetes.default.svc
-      namespace: finpay-prod
-    - server: https://kubernetes.default.svc
-      namespace: monitoring
-    - server: https://kubernetes.default.svc
-      namespace: ingress-nginx
-    - server: https://kubernetes.default.svc
-      namespace: cert-manager
-    - server: https://kubernetes.default.svc
-      namespace: external-secrets
-
-  # Allow all core Kubernetes resources + our custom ones
+      namespace: "*"
   clusterResourceWhitelist:
-    - group: ""
-      kind: Namespace
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRole
-    - group: rbac.authorization.k8s.io
-      kind: ClusterRoleBinding
-
+    - group: "*"
+      kind: "*"
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
-
-  # Sync windows — block auto-sync to prod outside business hours
-  syncWindows:
-    - kind: allow
-      schedule: "0 8 * * 1-5"   # Mon–Fri 08:00
-      duration: 10h
-      applications:
-        - "*-prod"
-      namespaces:
-        - finpay-prod
-      manualSync: true
-
-  roles:
-    - name: developer
-      description: Developers can sync and view apps
-      policies:
-        - p, proj:finpay:developer, applications, get,    finpay/*, allow
-        - p, proj:finpay:developer, applications, sync,   finpay/*, allow
-        - p, proj:finpay:developer, applications, action, finpay/*, allow
-      groups:
-        - dev-team
