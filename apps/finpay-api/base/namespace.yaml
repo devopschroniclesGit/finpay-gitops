@@ -1,9 +1,7 @@
-################################################################################
-# Namespace — overridden per overlay
-################################################################################
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: finpay-base   # patched per overlay to finpay-dev / finpay-staging / finpay-prod
+  name: finpay
   labels:
     app.kubernetes.io/managed-by: argocd
+    istio-injection: enabled

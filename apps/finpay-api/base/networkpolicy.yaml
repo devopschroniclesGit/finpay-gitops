@@ -1,8 +1,3 @@
-################################################################################
-# apps/finpay-api/base/networkpolicy.yaml
-# Default-deny all; explicitly allow ingress from ingress-nginx and
-# egress to RDS/Redis (via CIDR), DNS, and AWS APIs.
-################################################################################
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -11,22 +6,17 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: finpay-api
-
   policyTypes:
     - Ingress
     - Egress
-
   ingress:
-    # Allow traffic from the ingress controller namespace
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
+              kubernetes.io/metadata.name: istio-ingress
       ports:
         - port: 3000
           protocol: TCP
-
-    # Allow Prometheus scraping from monitoring namespace
     - from:
         - namespaceSelector:
             matchLabels:
@@ -34,26 +24,28 @@ spec:
       ports:
         - port: 3000
           protocol: TCP
-
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: finpay
+      ports:
+        - port: 3000
+          protocol: TCP
   egress:
-    # DNS resolution
     - ports:
         - port: 53
           protocol: UDP
         - port: 53
           protocol: TCP
-
-    # PostgreSQL (port opened to private subnet CIDRs, overlays set CIDR)
     - ports:
         - port: 5432
           protocol: TCP
-
-    # Redis
     - ports:
         - port: 6379
           protocol: TCP
-
-    # AWS Secrets Manager / SSM (HTTPS outbound)
+    - ports:
+        - port: 5672
+          protocol: TCP
     - ports:
         - port: 443
           protocol: TCP

@@ -1,10 +1,7 @@
-################################################################################
-# apps/finpay-api/overlays/prod/kustomization.yaml
-################################################################################
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: finpay-prod
+namespace: finpay
 
 resources:
   - ../../base
@@ -12,8 +9,8 @@ resources:
 
 images:
   - name: REGISTRY/finpay-api
-    newName: 623155450332.dkr.ecr.eu-north-1.amazonaws.com/finpay-api
-    newTag: latest   # CI replaces with git SHA tag: v1.2.3-abc1234
+    newName: 150103290775.dkr.ecr.us-east-1.amazonaws.com/finpay-api
+    newTag: latest
 
 patches:
   - target:
@@ -22,16 +19,15 @@ patches:
     patch: |-
       - op: replace
         path: /metadata/name
-        value: finpay-prod
+        value: finpay
 
-  # Production: 3 replicas minimum
   - target:
       kind: Deployment
       name: finpay-api
     patch: |-
       - op: replace
         path: /spec/replicas
-        value: 3
+        value: 2
 
   - target:
       kind: Deployment
@@ -42,10 +38,10 @@ patches:
         value:
           requests:
             cpu: 200m
-            memory: 512Mi
+            memory: 256Mi
           limits:
-            cpu: 1000m
-            memory: 1Gi
+            cpu: 500m
+            memory: 512Mi
 
   - target:
       kind: HorizontalPodAutoscaler
@@ -53,19 +49,10 @@ patches:
     patch: |-
       - op: replace
         path: /spec/minReplicas
-        value: 3
+        value: 2
       - op: replace
         path: /spec/maxReplicas
-        value: 20
-
-  # PDB — keep at least 2 pods during disruptions
-  - target:
-      kind: PodDisruptionBudget
-      name: finpay-api
-    patch: |-
-      - op: replace
-        path: /spec/minAvailable
-        value: 2
+        value: 10
 
   - target:
       kind: ExternalSecret
@@ -73,16 +60,16 @@ patches:
     patch: |-
       - op: replace
         path: /spec/data/0/remoteRef/key
-        value: finpay/prod/api
+        value: finpay/production
       - op: replace
         path: /spec/data/1/remoteRef/key
-        value: finpay/prod/api
+        value: finpay/production
       - op: replace
         path: /spec/data/2/remoteRef/key
-        value: finpay/prod/api
+        value: finpay/production
       - op: replace
         path: /spec/data/3/remoteRef/key
-        value: finpay/prod/api
+        value: finpay/production
 
   - target:
       kind: ServiceAccount
@@ -90,7 +77,7 @@ patches:
     patch: |-
       - op: replace
         path: /metadata/annotations/eks.amazonaws.com~1role-arn
-        value: arn:aws:iam::623155450332:role/finpay-prod-eks-external-secrets
+        value: arn:aws:iam::150103290775:role/finpay-eso-role
 
 commonLabels:
   environment: prod
