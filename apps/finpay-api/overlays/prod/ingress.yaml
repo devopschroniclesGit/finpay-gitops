@@ -34,3 +34,10 @@ spec:
                 name: finpay-api
                 port:
                   name: http
+          - path: /api/v1/health
+            pathType: Prefix
+            backend:
+              service:
+                name: finpay-api
+                port:
+                  name: http
