@@ -59,9 +59,14 @@ spec:
                 name: finpay-api-secret
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
+            readOnlyRootFilesystem: false
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: prisma-engines
+              mountPath: /app/node_modules/@prisma/engines
       containers:
         - name: finpay-api
           image: REGISTRY/finpay-api:latest
@@ -128,4 +133,6 @@ spec:
         - name: tmp
           emptyDir: {}
         - name: logs
+          emptyDir: {}
+        - name: prisma-engines
           emptyDir: {}
