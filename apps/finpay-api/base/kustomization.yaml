@@ -1,7 +1,3 @@
-################################################################################
-# apps/finpay-api/base/kustomization.yaml
-# Base resources shared across all environments
-################################################################################
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -14,12 +10,12 @@ resources:
   - serviceaccount.yaml
   - externalsecret.yaml
   - networkpolicy.yaml
+  - services/auth-deployment.yaml
+  - services/account-deployment.yaml
+  - services/transaction-deployment.yaml
+  - services/notification-deployment.yaml
 
 commonLabels:
   app.kubernetes.io/name: finpay-api
   app.kubernetes.io/component: api
   app.kubernetes.io/part-of: finpay
-  - services/auth-deployment.yaml
-  - services/account-deployment.yaml
-  - services/transaction-deployment.yaml
-  - services/notification-deployment.yaml
