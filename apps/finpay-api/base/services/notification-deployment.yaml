@@ -40,8 +40,6 @@ spec:
               value: production
             - name: SERVICE_NAME
               value: notification-service
-            - name: RABBITMQ_URL
-              value: amqp://finpay:FinPay@RMQ2024%21@rabbitmq.finpay.svc.cluster.local:5672/finpay
             - name: ALERT_EMAIL
               value: github@devopschronicles.com
           resources:
