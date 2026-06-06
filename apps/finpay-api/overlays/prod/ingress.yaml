@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: finpay-api
+  name: finpay-ingress
   namespace: finpay
   annotations:
     kubernetes.io/ingress.class: alb
@@ -17,27 +17,27 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: finpay-api
+                name: auth-svc
                 port:
-                  name: http
+                  number: 3001
           - path: /api/v1/accounts
             pathType: Prefix
             backend:
               service:
-                name: finpay-api
+                name: account-svc
                 port:
-                  name: http
+                  number: 3002
           - path: /api/v1/transactions
             pathType: Prefix
             backend:
               service:
-                name: finpay-api
+                name: transaction-svc
                 port:
-                  name: http
+                  number: 3003
           - path: /api/v1/health
             pathType: Prefix
             backend:
               service:
-                name: finpay-api
+                name: auth-svc
                 port:
-                  name: http
+                  number: 3001

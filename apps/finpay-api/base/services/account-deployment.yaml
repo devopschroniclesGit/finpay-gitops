@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: account-service
+  labels:
+    app.kubernetes.io/name: account-service
+    app.kubernetes.io/part-of: finpay
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: account-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: account-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3002"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: account-service
+          image: 150103290775.dkr.ecr.us-east-1.amazonaws.com/finpay-account:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3002
+          envFrom:
+            - secretRef:
+                name: finpay-api-secret
+          env:
+            - name: PORT
+              value: "3002"
+            - name: NODE_ENV
+              value: production
+            - name: SERVICE_NAME
+              value: account-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3002
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: account-svc
+  labels:
+    app.kubernetes.io/name: account-service
+spec:
+  selector:
+    app.kubernetes.io/name: account-service
+  ports:
+    - name: http
+      port: 3002
+      targetPort: 3002
+  type: ClusterIP

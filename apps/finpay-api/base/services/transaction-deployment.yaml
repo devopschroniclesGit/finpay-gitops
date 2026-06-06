@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-service
+  labels:
+    app.kubernetes.io/name: transaction-service
+    app.kubernetes.io/part-of: finpay
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: transaction-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3003"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: transaction-service
+          image: 150103290775.dkr.ecr.us-east-1.amazonaws.com/finpay-transaction:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3003
+          envFrom:
+            - secretRef:
+                name: finpay-api-secret
+          env:
+            - name: PORT
+              value: "3003"
+            - name: NODE_ENV
+              value: production
+            - name: SERVICE_NAME
+              value: transaction-service
+            - name: RABBITMQ_URL
+              value: amqp://finpay:FinPay@RMQ2024%21@rabbitmq.finpay.svc.cluster.local:5672/finpay
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3003
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3003
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-svc
+  labels:
+    app.kubernetes.io/name: transaction-service
+spec:
+  selector:
+    app.kubernetes.io/name: transaction-service
+  ports:
+    - name: http
+      port: 3003
+      targetPort: 3003
+  type: ClusterIP
