@@ -40,6 +40,7 @@ spec:
             readOnlyRootFilesystem: false
             capabilities:
               drop: ["ALL"]
+      serviceAccountName: finpay-api
       containers:
         - name: auth-service
           image: 150103290775.dkr.ecr.us-east-1.amazonaws.com/finpay-auth:latest

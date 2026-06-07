@@ -28,6 +28,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
         fsGroup: 1001
+      serviceAccountName: finpay-api
       containers:
         - name: account-service
           image: 150103290775.dkr.ecr.us-east-1.amazonaws.com/finpay-account:latest

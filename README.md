@@ -1,127 +1,240 @@
 # finpay-gitops
 
-GitOps repository for FinPay. Argo CD watches this repo and applies changes to the cluster.  
-**No application code here. No Terraform here.** Only Kubernetes manifests and Helm values.
+GitOps repository for FinPay microservices on AWS EKS.
+ArgoCD watches this repo and applies all changes to the cluster.
+**No application code here. No Terraform here.** Only Kubernetes manifests.
 
 ## How It Works
 
 ```
-Developer pushes to finpay-api (GitHub)
+Developer pushes to finpay-microservices (GitHub)
         │
         ▼
-GitHub Actions CI  ──► Build → Scan → Push image to ECR
+GitHub Actions CI  ──► Build 4 images → Push to ECR
         │
         ▼
-CI updates image tag   ──► kustomize edit set image ... → git push → HERE
+CI updates image tags  ──► kustomize edit set image → git push → HERE
         │
         ▼
-Argo CD detects change ──► Applies new Deployment to cluster
+ArgoCD detects change  ──► Applies Deployments to cluster
         │
         ▼
-Kubernetes rolls out   ──► Zero-downtime rolling update
+Kubernetes rolls out   ──► Zero-downtime rolling update (maxUnavailable: 0)
 ```
 
 ## Repo Structure
 
 ```
 finpay-gitops/
-├── projects/
-│   ├── finpay-project.yaml    # AppProject (RBAC boundaries)
-│   ├── finpay-apps.yaml       # Applications: dev, staging, prod
-│   └── infra-apps.yaml        # ingress-nginx, cert-manager, ESO, Prometheus
-│
 ├── apps/
-│   └── finpay-api/
-│       ├── base/              # Shared manifests (Deployment, Service, HPA, PDB…)
-│       └── overlays/
-│           ├── dev/           # Patches: 1 replica, small resources, no TLS
-│           ├── staging/       # Patches: 2 replicas, medium resources, TLS staging cert
-│           └── prod/          # Patches: 3+ replicas, large resources, TLS prod cert
+│   ├── finpay-api/
+│   │   ├── base/
+│   │   │   ├── deployment.yaml          # Legacy finpay-api (to be removed)
+│   │   │   ├── service.yaml
+│   │   │   ├── externalsecret.yaml      # ESO — pulls from AWS Secrets Manager
+│   │   │   ├── hpa.yaml
+│   │   │   ├── pdb.yaml
+│   │   │   ├── serviceaccount.yaml
+│   │   │   ├── networkpolicy.yaml
+│   │   │   ├── namespace.yaml
+│   │   │   ├── kustomization.yaml
+│   │   │   └── services/
+│   │   │       ├── auth-deployment.yaml         # auth-service :3001
+│   │   │       ├── account-deployment.yaml      # account-service :3002
+│   │   │       ├── transaction-deployment.yaml  # transaction-service :3003
+│   │   │       └── notification-deployment.yaml # notification-service :3004
+│   │   └── overlays/
+│   │       ├── dev/
+│   │       ├── staging/
+│   │       └── prod/
+│   │           ├── kustomization.yaml   # Image tags, replicas, resource patches
+│   │           └── ingress.yaml         # ALB routing by path to each service
+│   └── finpay-web/
+│       └── base/
+│           ├── deployment.yaml          # nginx serving React build
+│           └── kustomization.yaml
 │
 └── infrastructure/
-    └── argocd/
-        ├── app-of-apps.yaml        # Root Application — bootstrap entry point
-        ├── argocd-cm.yaml          # Argo CD config
-        ├── argocd-rbac-cm.yaml     # RBAC roles
-        └── cluster-secret-store.yaml  # ESO ClusterSecretStore (AWS Secrets Manager)
+    ├── argocd/
+    │   ├── argocd-ingress.yaml          # ALB ingress for ArgoCD UI
+    │   ├── cluster-secret-store.yaml    # ESO ClusterSecretStore
+    │   ├── argocd-cm.yaml
+    │   └── argocd-rbac-cm.yaml
+    └── monitoring/
+        └── grafana-ingress.yaml         # ALB ingress for Grafana UI
+```
+
+## ArgoCD Applications
+
+| App | Path | Namespace | Status |
+|---|---|---|---|
+| `finpay-prod` | `apps/finpay-api/overlays/prod` | finpay | Auto-sync, self-heal |
+| `finpay-web` | `apps/finpay-web/base` | finpay | Auto-sync, self-heal |
+
+## ALB Ingress Routing
+
+```
+ALB (finpay-ingress)
+├── /api/v1/auth         → auth-svc:3001
+├── /api/v1/accounts     → account-svc:3002
+├── /api/v1/transactions → transaction-svc:3003
+└── /api/v1/health       → auth-svc:3001
 ```
 
 ## Bootstrap (First-Time Setup)
 
-Assumes EKS cluster exists and Argo CD is installed (see finpay-k8s-infrastructure README).
+ArgoCD is installed by Terraform (`finpay-eks-infra`). After `terraform apply`:
 
 ```bash
-# 1. Apply the App-of-Apps — this single command bootstraps everything
-kubectl apply -n argocd -f infrastructure/argocd/app-of-apps.yaml
+# Applied automatically by post-apply.sh — or run manually:
 
-# 2. Watch Argo CD sync all applications
-kubectl -n argocd get applications -w
+kubectl apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finpay-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/devopschroniclesGit/finpay-gitops
+    targetRevision: main
+    path: apps/finpay-api/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finpay
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+EOF
 
-# 3. Access the Argo CD UI
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-# https://localhost:8080
+kubectl apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finpay-web
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/devopschroniclesGit/finpay-gitops
+    targetRevision: main
+    path: apps/finpay-web/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: finpay
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+EOF
 ```
 
-Argo CD will then install in order (controlled by `sync-wave` annotations):
-- **Wave -10**: App-of-Apps root
-- **Wave -5**: ingress-nginx, cert-manager, External Secrets Operator
-- **Wave -3**: Prometheus stack
-- **Wave 0**: finpay-api (dev, staging, prod)
+## Apply Platform Ingresses
+
+```bash
+# ArgoCD and Grafana get their own ALBs
+kubectl apply -f infrastructure/argocd/argocd-ingress.yaml
+kubectl apply -f infrastructure/monitoring/grafana-ingress.yaml
+
+# Get all ALB URLs
+kubectl get ingress -A
+```
 
 ## Making a Change
 
-### Deploying a new app version (automated via CI)
-The GitHub Actions pipeline in `finpay-api` does this automatically on push to `main`.  
-You never need to manually edit image tags.
+### Deploy a new image version
 
-### Changing Kubernetes config (e.g. increase replicas)
 ```bash
-# Edit the relevant overlay
+# CI does this automatically on merge to main in finpay-microservices
+# Manual update:
+cd apps/finpay-api/overlays/prod
+kustomize edit set image \
+  finpay-auth=150103290775.dkr.ecr.us-east-1.amazonaws.com/finpay-auth:abc1234
+
+git add . && git commit -m "chore: update auth image to abc1234" && git push
+# ArgoCD syncs within 3 minutes
+```
+
+### Change Kubernetes config
+
+```bash
+# Edit the relevant file
 vim apps/finpay-api/overlays/prod/kustomization.yaml
 
-# Validate your change renders correctly
-kustomize build apps/finpay-api/overlays/prod | kubectl diff -f -
+# Validate locally
+kubectl kustomize apps/finpay-api/overlays/prod
 
-# Commit and push — Argo CD syncs automatically within 3 minutes
-git add . && git commit -m "feat(prod): increase min replicas to 5" && git push
+# Commit and push — ArgoCD syncs automatically
+git add . && git commit -m "feat: increase replicas to 3" && git push
 ```
 
-### Checking what Argo CD will apply (dry-run)
+### Force an immediate sync
+
 ```bash
-kustomize build apps/finpay-api/overlays/prod
-```
-
-## Environments
-
-| Namespace      | Argo CD App         | Auto-Sync | Image Source               |
-|----------------|---------------------|-----------|----------------------------|
-| finpay-dev     | finpay-api-dev      | ✅ Yes    | ECR `sha-<commit>`         |
-| finpay-staging | finpay-api-staging  | ✅ Yes    | ECR `sha-<commit>`         |
-| finpay-prod    | finpay-api-prod     | ❌ No (drift-heal only) | ECR `sha-<commit>` |
-
-Production image tags are updated by CI but the sync itself requires a manual trigger in Argo CD UI or:
-```bash
-argocd app sync finpay-api-prod
+kubectl annotate application finpay-prod -n argocd \
+  argocd.argoproj.io/refresh=hard --overwrite
 ```
 
 ## Secrets
 
-Secrets are **never stored here**. They live in AWS Secrets Manager under `finpay/<env>/api`.  
-The External Secrets Operator reads them and creates a Kubernetes Secret named `finpay-api-secret`.
+Secrets are **never stored in this repo**. They live in AWS Secrets Manager at `finpay/production`.
+
+The External Secrets Operator reads them and creates K8s Secret `finpay-api-secret` in the `finpay` namespace.
+
+| Secret key | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (`!` encoded as `%21`) |
+| `REDIS_URL` | ElastiCache endpoint |
+| `JWT_SECRET` | Token signing key |
+| `RABBITMQ_URL` | AMQP connection string (`!` encoded as `%21`) |
 
 To rotate a secret:
+
 ```bash
-aws secretsmanager put-secret-value \
-  --secret-id finpay/prod/api \
+aws secretsmanager update-secret \
+  --secret-id finpay/production \
+  --region us-east-1 \
   --secret-string '{"JWT_SECRET":"new-value", ...}'
-# ESO will pick up the change within 1 hour (refreshInterval)
-# The Deployment restarts automatically via the stakater/reloader annotation
+
+# Force ESO to refresh immediately
+kubectl annotate externalsecret finpay-api-secret -n finpay \
+  force-sync=$(date +%s) --overwrite
 ```
 
-## Adding a New Environment
+## Checking ArgoCD status
 
-1. Copy `apps/finpay-api/overlays/staging` → `apps/finpay-api/overlays/uat`
-2. Edit namespace, image registry, resource patches
-3. Add an Application entry in `projects/finpay-apps.yaml`
-4. Add the namespace to the AppProject destinations in `projects/finpay-project.yaml`
-5. Commit and push — Argo CD creates it automatically
+```bash
+# CLI
+kubectl get applications -n argocd
+
+# Get ArgoCD admin password
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d && echo
+
+# UI — get ALB URL
+kubectl get ingress argocd-ingress -n argocd
+```
+
+## Known issues
+
+| Issue | Status |
+|---|---|
+| Old `finpay-api` deployment still in base | Should be removed — still running alongside microservices |
+| notification-service 54+ restarts | RabbitMQ reconnect logic needed |
+| ALB URLs change after every rebuild | Add Route53 custom domain |
+
+## Related repos
+
+| Repo | Purpose |
+|---|---|
+| [finpay-microservices](https://github.com/devopschroniclesGit/finpay-microservices) | 4 Node.js microservices — source of Docker images |
+| [finpay-eks-infra](https://github.com/devopschroniclesGit/finpay-eks-infra) | Terraform — provisions EKS, RDS, Redis, ECR, ArgoCD |
+| [finpay-web](https://github.com/devopschroniclesGit/finpay-web) | React + Vite frontend |
+| [finpay-api](https://github.com/devopschroniclesGit/finpay-api) | Original monolith |
+| [finpay-infrastructure](https://github.com/devopschroniclesGit/finpay-infrastructure) | Original Elastic Beanstalk setup |
