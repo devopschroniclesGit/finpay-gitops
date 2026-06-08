@@ -17,7 +17,3 @@ commonLabels:
   app.kubernetes.io/name: finpay-api
   app.kubernetes.io/component: api
   app.kubernetes.io/part-of: finpay
-  - services/auth-deployment.yaml
-  - services/account-deployment.yaml
-  - services/transaction-deployment.yaml
-  - services/notification-deployment.yaml
