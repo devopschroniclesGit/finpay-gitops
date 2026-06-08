@@ -4,7 +4,6 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - service.yaml
-  - hpa.yaml
   - pdb.yaml
   - serviceaccount.yaml
   - externalsecret.yaml
