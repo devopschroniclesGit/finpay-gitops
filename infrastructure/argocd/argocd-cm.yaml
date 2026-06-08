@@ -12,7 +12,7 @@ metadata:
     app.kubernetes.io/part-of: argocd
 data:
   # The URL at which the Argo CD UI is accessible
-  url: https://argocd.finpay.internal
+  url: http://k8s-argocd-argocdin-86f4950dca-445310187.us-east-1.elb.amazonaws.com
 
   # Application resource tracking — annotation is more reliable than label
   application.instanceLabelKey: argocd.argoproj.io/app-name
