@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: finpay-web
+  namespace: finpay
+spec:
+  selector:
+    app.kubernetes.io/name: finpay-web
+  ports:
+    - port: 80
+      targetPort: 80
